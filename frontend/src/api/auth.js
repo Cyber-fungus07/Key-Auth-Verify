@@ -1,6 +1,6 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 // Change this to match wherever your FastAPI server runs
-export const BASE_URL = "http://localhost:8000";
+export const BASE_URL = "http://localhost:5001";
 
 // ─── TOKEN STORAGE ────────────────────────────────────────────────────────────
 export const tokenStore = {
@@ -88,9 +88,9 @@ export async function login(username, password) {
 // POST /api/protected/typing/submit  →  { logs }  (requires Bearer token)
 // Returns: { message, savedWords: number }
 // Call this AFTER login/register with the collected typing rounds.
-export async function submitTypingData(rounds) {
+export async function submitTypingData(rounds, isEnrollment = false) {
   const token = tokenStore.get();
   if (!token) throw new Error("Not authenticated — please log in first");
   const logs = buildLogsPayload(rounds);
-  return request("/api/protected/typing/submit", { logs }, token);
+  return request("/api/protected/typing/submit", { logs, isEnrollment }, token);
 }
