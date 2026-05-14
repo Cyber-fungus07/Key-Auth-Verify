@@ -19,16 +19,8 @@ connectDB();
 app.use(express.json());
 app.use(cors());
 // app.use(cookieParser());
-console.log('Registering routes...');
 app.use('/api/auth', userRoute);
-console.log('Auth routes registered at /api/auth');
 app.use('/api/protected', protectedRoutes);
-console.log('Protected routes registered at /api/protected');
-
-app.use((req, res) => {
-  console.log(`404: ${req.method} ${req.url}`);
-  res.status(404).send('Not Found');
-});
 
 app.listen(PORT, () => {
   console.log(`Server started on http://localhost:${PORT}`);

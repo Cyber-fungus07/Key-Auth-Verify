@@ -6,15 +6,12 @@ export default function LoginPage({ onSuccess, onSwitchToRegister }) {
   const [step, setStep]     = useState("form"); // form | captcha | loading
   const [error, setError]   = useState("");
   const [fields, setFields] = useState({ username: "", password: "" });
+  const [currentUser, setCurrentUser] = useState(null);
 
   function setField(k, v) { setFields((f) => ({ ...f, [k]: v })); }
 
-  function handleFormSubmit(e) {
+  async function handleFormSubmit(e) {
     e.preventDefault();
-    // if (!fields.username.trim() || !fields.password.trim()) {
-    //   setError("Please fill in all fields.");
-    //   return;
-    // }
     if (!fields.username.trim() || !fields.password.trim()) {
       setError("Please fill in all fields.");
       return;
@@ -27,18 +24,26 @@ export default function LoginPage({ onSuccess, onSwitchToRegister }) {
       setError("Password must be at least 6 characters.");
       return;
     }
+    
     setError("");
-    setStep("captcha");
+    setStep("loading"); // Show loader while checking password
+    try {
+      // Check credentials BEFORE typing
+      const authResult = await login(fields.username, fields.password);
+      setCurrentUser(authResult.user);
+      setStep("captcha");
+    } catch (err) {
+      setError(err.message);
+      setStep("form");
+    }
   }
 
   async function handleTypingComplete(roundData) {
     setStep("loading");
     setError("");
     try {
-      // 1. Verify credentials → get JWT
-      const authResult = await login(fields.username, fields.password);
-
-      // 2. Submit the single typing round (token now stored)
+      // Credentials already verified in handleFormSubmit
+      // Just submit the single typing round for biometric verification
       let typingResult = null;
       try {
         typingResult = await submitTypingData([roundData]);
@@ -56,7 +61,7 @@ export default function LoginPage({ onSuccess, onSwitchToRegister }) {
 
       onSuccess({
         type:       "login",
-        user:       authResult.user,
+        user:       currentUser,
         savedWords: typingResult?.savedWords ?? 0,
         verified:   typingResult?.verified ?? false,
         confidence: typingResult?.confidence ?? 0,

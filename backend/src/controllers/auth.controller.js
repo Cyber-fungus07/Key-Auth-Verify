@@ -92,9 +92,3 @@ export async function loginUser(req, res) {
     return res.status(500).json({ error: `Server Error! : ${err}` });
   }
 }
-
-// export function logoutUser(_req: Request, res: Response): void {
-//   // fixed: call the function
-//   res.clearCookie('token', { httpOnly: true });
-//   res.status(200).json({ message: 'Logged out successfully' });
-// }
