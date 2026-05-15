@@ -1,0 +1,61 @@
+# OS files
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# Node / JS
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build directories
+dist/
+**/dist/
+build/
+**/build/
+coverage/
+**/coverage/
+
+# Environment files
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+**/venv/
+ENV/
+env/
+.venv
+**/env/
+**/.venv
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Project specific
+backend/logs/
+fast-api/users.json
+
+# If you specifically want to ignore package-lock.json (usually not recommended)
+package-lock.json
+**/package-lock.json
