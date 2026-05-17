@@ -59,3 +59,6 @@ fast-api/users.json
 # If you specifically want to ignore package-lock.json (usually not recommended)
 package-lock.json
 **/package-lock.json
+
+fast-api-v2
+

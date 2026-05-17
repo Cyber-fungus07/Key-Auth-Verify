@@ -1,22 +1,31 @@
 import os
 import threading
-import time
 import pandas as pd
 from typing import Any
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler
 from feature_extractor import extract_features
+from pymongo import MongoClient
+from dotenv import load_dotenv
 
-# Configuration
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CSV_PATH = os.path.join(BASE_DIR, "bio_bio.csv")
+# Load configuration
+load_dotenv()
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/keystroke_biometrics")
+DB_NAME = "key_logger" # As seen in your backend .env
+COLLECTION_NAME = "biometrics"
+
+# Constants
 FEATURE_COUNT = 97
-REQUIRED_SAMPLES = 5
 CONFIDENCE_THRESHOLD = 0.60
 KNN_K = 3
+
+# MongoDB Client
+client = MongoClient(MONGO_URI)
+db = client[DB_NAME]
+collection = db[COLLECTION_NAME]
 
 class KeyEvent(BaseModel):
     key: str
@@ -46,16 +55,22 @@ class ModelCache:
         self._lock = threading.Lock()
 
     def train(self):
-        if not os.path.exists(CSV_PATH):
-            cols = [f"feature_{i}" for i in range(FEATURE_COUNT)] + ["CLASS"]
-            pd.DataFrame(columns=cols).to_csv(CSV_PATH, index=False)
+        # Fetch all data from MongoDB
+        cursor = collection.find({})
+        data = list(cursor)
+        
+        if len(data) < 2:
+            print("Not enough data in MongoDB to train.")
             return
 
-        df = pd.read_csv(CSV_PATH, keep_default_na=False)
-        if len(df) < 2: return # Need at least 2 samples to train
-
-        X_raw = df.iloc[:, :FEATURE_COUNT]
-        y = df["CLASS"].astype(str)
+        # Convert MongoDB documents to DataFrame
+        df = pd.DataFrame(data)
+        
+        # Extract features and labels
+        # Assuming the document structure: { "features": [f1, f2, ...], "user_id": "..." }
+        X_raw = pd.DataFrame(df['features'].tolist())
+        y = df["user_id"].astype(str)
+        
         scaler = StandardScaler()
         X = scaler.fit_transform(X_raw)
         
@@ -67,6 +82,7 @@ class ModelCache:
             self.scaler = scaler
             self.model = model
             self.classes = y.unique().tolist()
+        print(f"Model trained successfully with {len(df)} samples from {len(self.classes)} users.")
 
     def predict(self, features):
         with self._lock:
@@ -80,7 +96,7 @@ class ModelCache:
         with self._lock: return str(user_id) in self.classes
 
 cache = ModelCache()
-app = FastAPI(title="Keystroke Biometric API")
+app = FastAPI(title="Keystroke Biometric API (v2 - MongoDB Powered)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -102,21 +118,29 @@ def enroll(req: EnrollRequest):
     user_id = req.user_id.strip()
     if not user_id: raise HTTPException(400, "user_id required")
     
-    feature_rows = []
+    new_docs = []
     for attempt in req.samples:
-        feature_rows.append(extract_features(_to_raw(attempt)))
+        features = extract_features(_to_raw(attempt))
+        new_docs.append({
+            "user_id": user_id,
+            "features": features.tolist() if hasattr(features, 'tolist') else list(features)
+        })
 
-    df_existing = pd.read_csv(CSV_PATH, keep_default_na=False)
-    new_rows = [dict(zip(df_existing.columns[:FEATURE_COUNT], vec), CLASS=user_id) for vec in feature_rows]
-    pd.concat([df_existing, pd.DataFrame(new_rows)], ignore_index=True).to_csv(CSV_PATH, index=False)
+    if new_docs:
+        collection.insert_many(new_docs)
     
+    # Retrain model after enrollment
     cache.train()
-    return {"enrolled": True, "message": f"User {user_id} enrolled"}
+    return {"enrolled": True, "message": f"User {user_id} enrolled and saved to MongoDB"}
 
 @app.post("/verify")
 def verify(req: VerifyRequest):
     if not cache.is_enrolled(req.user_id):
-        raise HTTPException(404, f"User {req.user_id} not enrolled")
+        # Fallback check directly in DB if cache isn't ready
+        if collection.count_documents({"user_id": req.user_id}) == 0:
+            raise HTTPException(404, f"User {req.user_id} not enrolled")
+        else:
+            cache.train() # Force retrain if user exists in DB but not in cache
 
     features = extract_features(_to_raw(req.keystrokes))
     pred_user, confidence = cache.predict(features)
@@ -131,4 +155,9 @@ def verify(req: VerifyRequest):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "enrolled_users": len(cache.classes)}
+    return {
+        "status": "ok", 
+        "storage": "mongodb",
+        "enrolled_users": len(cache.classes),
+        "total_samples": collection.count_documents({})
+    }
