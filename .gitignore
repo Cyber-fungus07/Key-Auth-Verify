@@ -54,11 +54,11 @@ env/
 
 # Project specific
 backend/logs/
-fast-api/users.json
 
 # If you specifically want to ignore package-lock.json (usually not recommended)
 package-lock.json
 **/package-lock.json
 
-fast-api-v2
+fast-api-svm/test_accuracy.py
+fast-api/repair_biometrics.py
 
